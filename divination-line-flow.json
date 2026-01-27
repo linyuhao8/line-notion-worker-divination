@@ -1,0 +1,2561 @@
+{
+  "name": "divination-line-flow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks"
+            }
+          ]
+        }
+      },
+      "id": "16b6fe21-fbb3-4cab-8d6d-0dcdc881f8ae",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        432,
+        80
+      ],
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "url": "https://api.cloudflare.com/client/v4/user/tokens/verify",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 2JbvZeD1fnPFZtS90KJvyW5tUlXJQC5mp8MsMYps"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5a6a3547-9d18-43c2-8a69-884d5f8719f4",
+      "name": "HTTP Request verify CF bucket token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -496,
+        272
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.cloudflare.com/client/v4/accounts/bce5e975d99845b4cd4288557b72efe4/r2/buckets",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 2JbvZeD1fnPFZtS90KJvyW5tUlXJQC5mp8MsMYps"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "name",
+              "value": "my-bucket"
+            },
+            {
+              "name": "locationHint",
+              "value": "enam"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "72290fd9-a796-4569-9e9c-4fd7e2603326",
+      "name": "HTTP Request Create CF bucket",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -496,
+        48
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "content": "① 圖片上傳與 cdnUrl 回寫（Notion → R2）\n\n名稱：Image CDN 同步\n觸發：Schedule（固定週期，如每小時 / 每日凌晨）\n\n主要步驟\n\t1.\tNotion Get Many：篩選 cdnUrl 為空 且 圖片不為空 的頁面並下載檔案\n\t2.\tFunction（展平）：一頁多圖拆成多筆，統一 binary 名稱，產生 R2 物件 key\n\t3.\tMove Binary → Base64：轉 Base64 以便上傳\n\t4.\tHTTP Request（Worker /upload）：將檔案寫入 R2（key、contentType、overwrite）\n\t5.\tSet：組出 cdnUrl = PUBLIC_BASE_URL + key\n\t6.\tNotion Update Page：把 cdnUrl 寫回頁面\n\n輸入：Notion 資料庫頁面（圖片檔案欄）\n輸出：R2 物件（公開網址）＋ Notion 頁面 cdnUrl 欄位已填寫\n\n用意：把 Notion 圖片轉存到自家 CDN（R2）以加速讀取與穩定外鏈，後續 LINE 直接用 cdnUrl。\n備註：一次處理 50 筆（或依設定），多輪排程自然消化；避免重複上傳可用 overwrite=false。",
+        "height": 288,
+        "width": 336
+      },
+      "id": "d77798c7-e1d7-4a9a-8a7a-6ee512c53571",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.line.me/v2/bot/info",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer MvhdqgxUr/egIzKDPKorsNu1TkXneswTqC1qKoeNWUM7tMA5Wn8CEpmf1uJJ0tlgLrsqM/L819TMGfr7W99qO4RNggCPFpVmT6n7FE0Y159qReZDMAIVbvVmr6FlqaglZ5YOoYJXzxE9lmFwYnDllgdB04t89/1O/w1cDnyilFU="
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1284f48-858b-414d-906c-147ab9e1a2a5",
+      "name": "Line chatBot check info",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -512,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        432,
+        1232
+      ],
+      "id": "fd00332b-ed85-4088-8fa2-8496ae0e0240",
+      "name": "Schedule Trigger1"
+    },
+    {
+      "parameters": {
+        "content": "② 卡牌 ID 快取（分牌組）到 R2\n\n名稱：Card ID Cache（R2 快取）\n觸發：Schedule（建議每小時）\n\n主要步驟\n\t1.\tNotion Get Many：篩選 圖片不為空、cdnUrl 不為空、狀態=使用中\n\t2.\tFunction（分組）：依 分類/Deck 映射到 love/money/career/daily，蒐集各組 pageId（去掉 “-”）\n\t3.\tHTTP Request（Worker /updateCacheCardId）：逐組送出 { deck, ids[] }，Worker 以 cache/card-ids-<deck>.json 覆寫保存\n\n輸入：Notion 資料庫有效卡牌頁面\n輸出：R2 中四個（或多個）牌組快取檔：cache/card-ids-love.json … 等\n\n用意：把「隨機抽一張卡」改為讀 R2 快取（毫秒級），降低 Notion API 壓力與延遲。\n備註：快取檔只存 ids[] 與 updatedAt，小而穩；Notion 新增/變更會在下一輪排程自動更新。",
+        "height": 288,
+        "width": 496
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -128,
+        1136
+      ],
+      "typeVersion": 1,
+      "id": "ce105d3f-6026-4586-9754-6eb0325e6148",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "③ LINE Webhook 抽牌回覆（選單／抽牌）\n\n名稱：LINE 抽牌互動\n觸發：Webhook（LINE 事件）\n\n主要步驟\nA) 使用者輸入「抽牌」\n\t•\tSwitch 判斷 message.text 含「抽牌」 → 回覆 Buttons Template（四個 postback：感情/財運/事業/今日）\n\nB) 使用者點選某一牌組（postback）\n\t•\tSet 解析 deck（例如 love）\n\t•\tHTTP Request（Worker /getCardId?deck=love&n=1）拿到隨機 id\n\t•\tNotion Get Page（用 id 取完整內容）\n\t•\tSet 組 LINE Flex（圖片、名稱、副標、描述、建議）\n\t•\tHTTP Reply：回傳圖文卡片\n\n輸入：LINE 事件（message / postback）\n輸出：LINE 回覆訊息（選單或抽到的卡片 Flex）\n\n用意：以最少 API 次數提供即時抽牌體驗：抽牌時只讀 R2 取 ID，再查單筆 Notion。\n備註：replyToken 只能用一次；若需要中途提示（如「正在洗牌…」）可用 push 但需 userId 並注意速率限制。",
+        "height": 400,
+        "width": 496
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -144,
+        512
+      ],
+      "typeVersion": 1,
+      "id": "fdcb47c7-1ff7-4cde-8edf-c0e5a48bfdfe",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const msgs = [\n  \"🔮 正在為你抽牌中…\",\n  \"🃏 洗牌中，命運正在轉動…\",\n  \"✨ 請稍等，靈感正在連線中…\"\n];\nconst pick = msgs[Math.floor(Math.random() * msgs.length)];\n\nreturn {\n  to: $input.first().json.userId ,\n  messages: [{ type: \"text\", text: pick }]\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1408,
+        992
+      ],
+      "id": "114ce808-52fd-42ad-9136-29993733e3fe",
+      "name": "Code in JavaScript2",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/push",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.Line_Access_Token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{  $json }}",
+        "options": {}
+      },
+      "id": "f79b6574-dd18-4ba5-bd92-efdac67a42ac",
+      "name": "Quick-reply2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1680,
+        1088
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "line-webhook",
+        "options": {}
+      },
+      "id": "39542032-e20b-4f89-82c9-bfa102933a2c",
+      "name": "接收LINE訊息",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        416,
+        624
+      ],
+      "webhookId": "4a717eca-310a-43c2-9411-2b36345c76f4"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 把 LINE webhook 的 events[] 拆成多筆 item，讓後續每筆獨立處理\nconst out = [];\nconst events = $json.events || $json.body?.events || [];\n\nfor (const ev of events) {\n  const base = {\n    replyToken: ev.replyToken || null,\n    userId: ev.source?.userId || null,\n    groupId: ev.source?.groupId || null,\n    roomId: ev.source?.roomId || null,\n    eventType: ev.type,\n    timestamp: ev.timestamp,\n    tsISO: ev.timestamp ? new Date(ev.timestamp).toISOString() : null,\n  };\n\n  if (ev.type === 'message' && ev.message?.type === 'text') {\n    // 🔹 使用者發文字訊息（例如「抽牌」）\n    out.push({\n      json: {\n        ...base,\n        messageType: ev.message.type,\n        userText: ev.message.text,\n        quoteToken: ev.message?.quoteToken || null,\n      }\n    });\n\n  } else if (ev.type === 'postback') {\n    // 🔹 使用者按了 postback 按鈕（例如抽牌選項）\n    out.push({\n      json: {\n        ...base,\n        postbackData: ev.postback?.data || null,\n        params: ev.postback?.params || null,\n      }\n    });\n\n  } else if (ev.type === 'follow' || ev.type === 'join') {\n    // 🔹 新加入好友或被邀進群\n    out.push({\n      json: {\n        ...base,\n        notice: ev.type === 'follow' ? 'new_friend' : 'join_group'\n      }\n    });\n\n  } else {\n    // 🔹 其他未分類事件（可用來 debug）\n    out.push({\n      json: {\n        ...base,\n        raw: ev\n      }\n    });\n  }\n}\n\n// 若無事件則回傳一筆 skip item，避免後續節點報錯\nreturn out.length ? out : [{ json: { skip: true } }];"
+      },
+      "id": "d0d48e45-afa9-4d30-b3b0-41d598a06386",
+      "name": "將回傳資料整理",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        656,
+        624
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.userText }}",
+                    "rightValue": "抽牌",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "e0678351-ac18-4af3-a0ec-24171d8bae6d"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "9452c9ac-184b-44ba-a670-5f9fb5f71b31",
+                    "leftValue": "={{ $json.eventType }}",
+                    "rightValue": "postback",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        1040,
+        528
+      ],
+      "id": "ff9232f6-773d-45eb-9a66-18178ebbd79b",
+      "name": "偵測是抽牌選項or給牌"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "286a318b-5ce6-8067-bd29-c258ae0cdffe",
+          "mode": "list",
+          "cachedResultName": "卡片庫",
+          "cachedResultUrl": "https://www.notion.so/286a318b5ce68067bd29c258ae0cdffe"
+        },
+        "limit": 20,
+        "simple": false,
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "key": "cdnUrl|url",
+              "condition": "is_empty"
+            },
+            {
+              "key": "圖片|files",
+              "condition": "is_not_empty"
+            }
+          ]
+        },
+        "options": {
+          "downloadFiles": true,
+          "sort": {
+            "sortValue": [
+              {
+                "timestamp": true,
+                "key": "last_edited_time",
+                "direction": "descending"
+              }
+            ]
+          }
+        }
+      },
+      "id": "114e8126-aa03-4a2c-b5db-1a9be59571e4",
+      "name": "回傳沒有cdnUrl的page",
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2,
+      "position": [
+        640,
+        80
+      ],
+      "credentials": {
+        "notionApi": {
+          "id": "U50FbZ8sfcQ0uNaQ",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "15ccb818-96b1-4e68-b8ad-50810050335b",
+              "leftValue": "={{ $json.userText }}",
+              "rightValue": "抽牌",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1360,
+        448
+      ],
+      "id": "b30c0a39-ec2c-4752-8d3a-aa6a8e15e427",
+      "name": "是否包含關鍵字 抽牌"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/reply",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.Line_Access_Token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"replyToken\": \"{{ $json.replyToken }}\",\n  \"messages\": [\n    {\n      \"type\": \"template\",\n      \"altText\": \"請選擇塔羅占卜分類\",\n      \"template\": {\n        \"type\": \"buttons\",\n        \"thumbnailImageUrl\": \"https://images.unsplash.com/photo-1600430073932-e915854d9d4d?q=80&w=1470&auto=format&fit=crop&ixlib=rb-4.1.0\",\n        \"imageAspectRatio\": \"rectangle\",\n        \"imageSize\": \"cover\",\n        \"title\": \"塔羅占卜\",\n        \"text\": \"請選擇你想占卜的主題：\",\n        \"actions\": [\n          {\n            \"type\": \"postback\",\n            \"label\": \"💞 感情\",\n            \"data\": \"action=draw&deck=love\",\n            \"displayText\": \"我想占卜 💞 感情\"\n          },\n          {\n            \"type\": \"postback\",\n            \"label\": \"💰 財運\",\n            \"data\": \"action=draw&deck=money\",\n            \"displayText\": \"我想占卜 💰 財運\"\n          },\n          {\n            \"type\": \"postback\",\n            \"label\": \"💼 事業\",\n            \"data\": \"action=draw&deck=career\",\n            \"displayText\": \"我想占卜 💼 事業\"\n          },\n          {\n            \"type\": \"postback\",\n            \"label\": \"🌞 今日運勢\",\n            \"data\": \"action=draw&deck=daily\",\n            \"displayText\": \"我想占卜 🌞 今日運勢\"\n          }\n        ]\n      }\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "c2927dfd-4574-4a21-9f83-25abada5db88",
+      "name": "回覆抽牌分類選項",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1648,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 將每一頁的所有圖片「展平」成多筆，每筆只帶一張圖，並把 binary key 統一改名為 'file'\n\nfunction safeName(s) {\n  return (s || 'untitled').replace(/[^\\w\\u4e00-\\u9fa5-]+/g, '_').slice(0, 40);\n}\nfunction extFromName(name, fallback='jpg') {\n  const m = (name||'').toLowerCase().match(/\\.(jpe?g|png|webp|gif)$/);\n  return (m ? m[1] : fallback).replace('jpeg','jpg');\n}\n// 台灣時間（UTC+8）\nconst taiwanNow = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Taipei' });\n\n// 格式化成檔名友善版本（例：2025-10-07_17-45-32）\nconst dateStr = taiwanNow.replace(' ', '_').replace(/:/g, '-');\n\nconst out = [];\n\nfor (const it of items) {\n  const page = it.json || {};\n  const p = page.properties || {};\n  const title = (p['名稱']?.title?.[0]?.plain_text) || (p['Title']?.title?.[0]?.plain_text) || 'untitled';\n  const safe = safeName(title);\n\n  // Notion 檔案欄位（你是「照片」，若叫 Image 也一併兼容）\n  const files = (p['圖片']?.files || p['Image']?.files || []);\n\n  // 這筆 item 裡 Notion Download Files 產生的所有 binary key（通常會是 照片_0、照片_1…）\n  const binKeys = Object.keys(it.binary || {});\n  if (!binKeys.length) continue;\n\n  // 若數量對得上，就一一對應；對不上就以 binary 為主逐一輸出\n  const n = Math.max(files.length, binKeys.length);\n\n  for (let i = 0; i < n; i++) {\n    const binKey = binKeys[i] ?? binKeys[0];     // 若只有一個 key（你碰到全叫 照片_0），就用同一個 key 但逐筆輸出\n    const binObj = it.binary?.[binKey];\n    if (!binObj) continue;\n\n    const originalName = files[i]?.name || binObj.fileName || `image_${i}.jpg`;\n    const ext = extFromName(originalName);\n    const basePath = $env.Img_R2_Path || 'divination';\n    const key = `${basePath}/${safe}_${dateStr}_${Math.random().toString(36).slice(2,6)}.${ext}`;\n    const url = files[i].file.url;\n\n    // ★ 重點：把 binary 重新命名為 'file'，每筆只帶「單一」binary\n    const binaryOut = { file: binObj };\n\n    out.push({\n      json: {\n        pageId: page.id,\n        title,\n        index: i,\n        key,           // 上傳到 R2 的物件 key（Worker 的 form-data \"key\" 就填這個）\n        binProp: 'file',// 之後要用 Binary Property 時固定就是 'file'\n        url: url\n      },\n      binary: binaryOut\n    });\n  }\n}\n\nreturn out;"
+      },
+      "id": "4f34d249-8aa1-46f8-b5d1-bccb5635b895",
+      "name": "將資料整理",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        864,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "setAllData": false,
+        "sourceKey": "file",
+        "destinationKey": "fileBase64",
+        "options": {
+          "encoding": "base64",
+          "keepSource": true
+        }
+      },
+      "id": "4cc322e4-4030-412c-a4b0-f2b4e5df15fe",
+      "name": "BinaryChangeToJson",
+      "type": "n8n-nodes-base.moveBinaryData",
+      "typeVersion": 1,
+      "position": [
+        1104,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            {
+              "name": "pageId",
+              "value": "={{$json.pageId}}"
+            },
+            {
+              "name": "key",
+              "value": "={{ $json.key }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "99f96db9-2353-4479-ae8e-098d0bd91bb2",
+      "name": "取出pageId和Key",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.R2_Worker_Url }}upload",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.R2_Worker_Token}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"fileBase64\": \"{{$json.fileBase64}}\",\n  \"key\": \"{{$json.key}}\",\n  \"overwrite\": true,\n  \"contentType\": \"{{$binary.file.mimeType || 'application/octet-stream'}}\"\n}",
+        "options": {}
+      },
+      "id": "00f7f8bf-7f15-4a90-925d-4c44c610b91c",
+      "name": "將圖片上傳到R2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1360,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.ok }}",
+              "value2": "={{ true }}"
+            }
+          ]
+        }
+      },
+      "id": "6caad206-f515-4a19-9cec-890ea4d17151",
+      "name": "如果上傳成功",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1616,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "mergeByFields": {
+          "values": [
+            {
+              "field1": "key",
+              "field2": "key"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0801c170-22d3-4efc-b80b-d3f9a1938c7d",
+      "name": "組合資料",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [
+        1888,
+        96
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            {
+              "name": "url",
+              "value": "={{ $env.PUBLIC_BASE_URL + $json.key }}"
+            },
+            {
+              "name": "pageId",
+              "value": "={{ $json.pageId }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "39e2a568-31df-432e-bf61-1ed5f3607323",
+      "name": "Key加入Cloudflare公開網址",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [
+        2096,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "update",
+        "pageId": {
+          "__rl": true,
+          "value": "={{ $json.pageId }}",
+          "mode": "id"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "cdnUrl|url",
+              "urlValue": "={{ $json.url }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        2368,
+        96
+      ],
+      "id": "68fdda59-29df-4ee3-a392-f12810d7fad2",
+      "name": "更新資料庫cdnUrl欄位",
+      "credentials": {
+        "notionApi": {
+          "id": "U50FbZ8sfcQ0uNaQ",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "286a318b-5ce6-8067-bd29-c258ae0cdffe",
+          "mode": "list",
+          "cachedResultName": "卡片庫",
+          "cachedResultUrl": "https://www.notion.so/286a318b5ce68067bd29c258ae0cdffe"
+        },
+        "returnAll": true,
+        "simple": false,
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "key": "圖片|files",
+              "condition": "is_not_empty"
+            },
+            {
+              "key": "cdnUrl|url",
+              "condition": "is_not_empty"
+            },
+            {
+              "key": "狀態|select",
+              "condition": "equals",
+              "selectValue": "使用中"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        688,
+        1232
+      ],
+      "id": "8ddc192a-0a88-4b9a-8c79-d8573ebd80d4",
+      "name": "取得所有卡片的資料",
+      "credentials": {
+        "notionApi": {
+          "id": "U50FbZ8sfcQ0uNaQ",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Function (Run once for all items)\n\nconst NORMALIZE_ID = true; // true = 去掉 Notion pageId 的 \"-\"，要跟 /getCardId 端一致\n\nfunction mapDeck(name) {\n  const n = String(name || '').trim().toLowerCase();\n  if (n === '感情' || n === 'love')   return 'love';\n  if (n === '財運' || n === 'money')  return 'money';\n  if (n === '事業' || n === 'career') return 'career';\n  if (n === '今日' || n === 'daily')  return 'daily';\n  return null;\n}\n\nconst groups = { love: [], money: [], career: [], daily: [] };\n\nfor (const it of items) {\n  const page = it.json || {};\n  const idRaw = page.id || page.pageId || '';\n  if (!idRaw) continue;\n\n  const id = NORMALIZE_ID ? idRaw.replace(/-/g, '') : idRaw;\n\n  // 取分類（你也可改抓 'deck' 欄位）\n  const catName =\n    page.properties?.['分類']?.select?.name ||\n    page.properties?.['deck']?.select?.name ||\n    '';\n\n  const deck = mapDeck(catName);\n  if (!deck) continue;\n\n  groups[deck].push(id);\n}\n\n// 依牌庫輸出多筆 items，方便後面直接一筆一 POST\nconst out = Object.entries(groups)\n  .filter(([, ids]) => ids.length > 0)\n  .map(([deck, ids]) => ({ json: { deck, ids } }));\n\nreturn out.length ? out : [{ json: { deck: null, ids: [] } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        976,
+        1232
+      ],
+      "id": "e07fbaad-ee72-4115-8a53-2032388b42b2",
+      "name": "整理所有卡片id和分類"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.R2_Worker_Url }}updateCacheCardId",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.R2_Worker_Token}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1280,
+        1232
+      ],
+      "id": "08d0acda-da60-48f0-9c2b-854663e7a91c",
+      "name": "更新最新CacheCard資料(隨機抽牌會從這邊拿pageId)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.R2_Worker_Url }}checkDaily",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.R2_Worker_Token}}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "=json",
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "jsonBody": "={\n  \"deck\": \"{{$json.deck}}\",\n  \"userId\": \"{{$json.userId}}\",\n  \"n\": 1\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1568,
+        816
+      ],
+      "id": "98d31f66-782c-4714-a51c-fa79eaa5cfe1",
+      "name": "根據分類取得隨機的PageId"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e450c3fe-b72a-47cb-a1d9-38d8505e4e56",
+              "name": "deck",
+              "value": "={{ ($json.postbackData || '').split('deck=')[1]?.trim() || '' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1392,
+        672
+      ],
+      "id": "33eae8c8-4cf7-49a2-ad55-12c88409897e",
+      "name": "取出deck分類值"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "get",
+        "pageId": {
+          "__rl": true,
+          "value": "={{ $json.ids[0] }}",
+          "mode": "id"
+        },
+        "simple": false
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        2832,
+        400
+      ],
+      "id": "a50c0c82-48e4-4ca7-84a1-2bf0e9b9e2ea",
+      "name": "取得Page資料",
+      "credentials": {
+        "notionApi": {
+          "id": "U50FbZ8sfcQ0uNaQ",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "87511e98-ed12-4dc3-acc7-9a3263100f15",
+              "name": "id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "1deb8275-5a75-4b0e-b553-d1fab11c00c4",
+              "name": "properties[\"卡牌建議\"]",
+              "value": "={{ $json.properties[\"卡牌建議\"].rich_text[0].text.content }}",
+              "type": "string"
+            },
+            {
+              "id": "1efaeb6a-1021-468f-adbc-bc604954a851",
+              "name": "properties[\"副標題\"]",
+              "value": "={{ $json.properties[\"副標題\"].rich_text[0].text.content }}",
+              "type": "string"
+            },
+            {
+              "id": "777d7f08-0fe4-4399-9333-b21c290666c9",
+              "name": "properties[\"卡牌描述\"]",
+              "value": "={{ $json.properties[\"卡牌描述\"].rich_text[0].text.content }}",
+              "type": "string"
+            },
+            {
+              "id": "d89392c8-6a2a-4c70-9a16-3e71a1ec6e40",
+              "name": "properties[\"名稱\"]",
+              "value": "={{ $json.properties[\"名稱\"].title[0].text.content }}",
+              "type": "string"
+            },
+            {
+              "id": "9ca10109-70d1-4128-9cd5-ef8ce405e6a6",
+              "name": "properties.cdnUrl",
+              "value": "={{ $json.properties.cdnUrl.url }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3072,
+        288
+      ],
+      "id": "1df35871-2c35-44aa-853c-65333812c0ec",
+      "name": "整理欄位資料"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        3296,
+        448
+      ],
+      "id": "b622bfdd-708d-489c-a3df-aae0d851936e",
+      "name": "組合"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "multiplex",
+        "options": {}
+      },
+      "id": "2dd4b2aa-e0f6-4557-b789-a6544535e064",
+      "name": "組合資料(前面有Line訊息資料",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [
+        2560,
+        624
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"replyToken\": \"{{ $json.replyToken }}\",\n  \"messages\": [\n    {\n      \"type\": \"flex\",\n      \"altText\": \"塔羅牌抽牌結果\",\n      \"contents\": {\n        \"type\": \"bubble\",\n        \"hero\": {\n          \"type\": \"image\",\n          \"url\": \"{{ $json.properties.cdnUrl }}\",\n          \"size\": \"full\",\n          \"aspectMode\": \"fit\",\n          \"aspectRatio\": \"1:1\"\n        },\n        \"body\": {\n          \"type\": \"box\",\n          \"layout\": \"vertical\",\n          \"spacing\": \"md\",\n          \"contents\": [\n            {\n              \"type\": \"text\",\n              \"text\": \"{{ $json.properties.名稱 }}\",\n              \"weight\": \"bold\",\n              \"size\": \"xl\",\n              \"align\": \"center\"\n            },\n            {\n              \"type\": \"text\",\n              \"text\": \"{{ $json.properties.副標題 }}\",\n              \"size\": \"sm\",\n              \"color\": \"#999999\",\n              \"align\": \"center\"\n            },\n            {\n              \"type\": \"separator\",\n              \"margin\": \"md\"\n            },\n            {\n              \"type\": \"text\",\n              \"text\": \"{{ $json.properties.卡牌描述 }}\",\n              \"wrap\": true,\n              \"margin\": \"md\"\n            },\n            {\n              \"type\": \"text\",\n              \"text\": \"建議：\",\n              \"weight\": \"bold\",\n              \"color\": \"#555555\",\n              \"margin\": \"lg\"\n            },\n            {\n              \"type\": \"text\",\n              \"text\": \"{{ $json.properties.卡牌建議 }}\",\n              \"wrap\": true,\n              \"margin\": \"sm\"\n            }\n          ]\n        },\n        \"footer\": {\n          \"type\": \"box\",\n          \"layout\": \"vertical\",\n          \"contents\": [\n            {\n              \"type\": \"text\",\n              \"text\": \"此為隨機結果 ✦\",\n              \"size\": \"xs\",\n              \"color\": \"#aaaaaa\",\n              \"align\": \"center\"\n            }\n          ]\n        }\n      }\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3776,
+        672
+      ],
+      "id": "88c95d4d-1831-4927-a874-945228142aab",
+      "name": "轉換成LINE訊息格式"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/reply",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.Line_Access_Token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "20071740-9a69-438b-82fa-6d4a05299831",
+      "name": "回覆LINE",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        4176,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 取環境變數\nconst url = $env.R2_Worker_Url;\nconst token = $env.R2_Worker_Token;\n\n// 印出到 n8n 的執行日誌\nconsole.log('R2_Worker_Url =', url , 'R2_Worker_Token' , token);\n\n// 也回傳它（方便在下一個節點看到輸出）\nreturn [{ r2Url: url ,token: token}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -528,
+        768
+      ],
+      "id": "58d9c4ee-aa72-4a41-a533-56ac4d8c4019",
+      "name": "check env"
+    },
+    {
+      "parameters": {
+        "jsCode": "const msgs = [\n  \"🔮 正在為你抽牌中…\",\n  \"🃏 洗牌中，命運正在轉動…\",\n  \"✨ 請稍等，靈感正在連線中…\"\n];\nconst pick = msgs[Math.floor(Math.random() * msgs.length)];\n\nreturn {\n  to: $input.first().json.userId ,\n  messages: [{ type: \"text\", text: pick }]\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        3008
+      ],
+      "id": "687780fb-d1ac-42e5-8181-5598d2f59d62",
+      "name": "Code in JavaScript",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/push",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.Line_Access_Token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{  $json }}",
+        "options": {}
+      },
+      "id": "5fe3435e-a334-4cd9-8551-acd84304ca6a",
+      "name": "Quick-reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1680,
+        3072
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "line-webhook",
+        "options": {}
+      },
+      "id": "5ab9069a-e677-4c6d-ae74-bfe951da4cdc",
+      "name": "接收LINE訊息1",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        416,
+        2720
+      ],
+      "webhookId": "4a717eca-310a-43c2-9411-2b36345c76f4",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// 把 LINE webhook 的 events[] 拆成多筆 item，讓後續每筆獨立處理\nconst out = [];\nconst events = $json.events || $json.body?.events || [];\n\nfor (const ev of events) {\n  const base = {\n    replyToken: ev.replyToken || null,\n    userId: ev.source?.userId || null,\n    groupId: ev.source?.groupId || null,\n    roomId: ev.source?.roomId || null,\n    eventType: ev.type,\n    timestamp: ev.timestamp,\n    tsISO: ev.timestamp ? new Date(ev.timestamp).toISOString() : null,\n  };\n\n  if (ev.type === 'message' && ev.message?.type === 'text') {\n    // 🔹 使用者發文字訊息（例如「抽牌」）\n    out.push({\n      json: {\n        ...base,\n        messageType: ev.message.type,\n        userText: ev.message.text,\n        quoteToken: ev.message?.quoteToken || null,\n      }\n    });\n\n  } else if (ev.type === 'postback') {\n    // 🔹 使用者按了 postback 按鈕（例如抽牌選項）\n    out.push({\n      json: {\n        ...base,\n        postbackData: ev.postback?.data || null,\n        params: ev.postback?.params || null,\n      }\n    });\n\n  } else if (ev.type === 'follow' || ev.type === 'join') {\n    // 🔹 新加入好友或被邀進群\n    out.push({\n      json: {\n        ...base,\n        notice: ev.type === 'follow' ? 'new_friend' : 'join_group'\n      }\n    });\n\n  } else {\n    // 🔹 其他未分類事件（可用來 debug）\n    out.push({\n      json: {\n        ...base,\n        raw: ev\n      }\n    });\n  }\n}\n\n// 若無事件則回傳一筆 skip item，避免後續節點報錯\nreturn out.length ? out : [{ json: { skip: true } }];"
+      },
+      "id": "e4051ac1-ee75-4e2d-9b35-abe4d21a5160",
+      "name": "將回傳資料整理1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        656,
+        2720
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.userText }}",
+                    "rightValue": "抽牌",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "e0678351-ac18-4af3-a0ec-24171d8bae6d"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "9452c9ac-184b-44ba-a670-5f9fb5f71b31",
+                    "leftValue": "={{ $json.eventType }}",
+                    "rightValue": "postback",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        1040,
+        2624
+      ],
+      "id": "5cce4a0c-baed-448b-8d0c-273e98e344aa",
+      "name": "偵測是抽牌選項or給牌1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "15ccb818-96b1-4e68-b8ad-50810050335b",
+              "leftValue": "={{ $json.userText }}",
+              "rightValue": "抽牌",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1360,
+        2544
+      ],
+      "id": "8023de5d-9f10-427a-a66b-ada2f3d437be",
+      "name": "是否包含關鍵字 抽牌1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/reply",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.Line_Access_Token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"replyToken\": \"{{ $json.replyToken }}\",\n  \"messages\": [\n    {\n      \"type\": \"template\",\n      \"altText\": \"請選擇塔羅占卜分類\",\n      \"template\": {\n        \"type\": \"buttons\",\n        \"thumbnailImageUrl\": \"https://images.unsplash.com/photo-1600430073932-e915854d9d4d?q=80&w=1470&auto=format&fit=crop&ixlib=rb-4.1.0\",\n        \"imageAspectRatio\": \"rectangle\",\n        \"imageSize\": \"cover\",\n        \"title\": \"塔羅占卜\",\n        \"text\": \"請選擇你想占卜的主題：\",\n        \"actions\": [\n          {\n            \"type\": \"postback\",\n            \"label\": \"💞 感情\",\n            \"data\": \"action=draw&deck=love\",\n            \"displayText\": \"我想占卜 💞 感情\"\n          },\n          {\n            \"type\": \"postback\",\n            \"label\": \"💰 財運\",\n            \"data\": \"action=draw&deck=money\",\n            \"displayText\": \"我想占卜 💰 財運\"\n          },\n          {\n            \"type\": \"postback\",\n            \"label\": \"💼 事業\",\n            \"data\": \"action=draw&deck=career\",\n            \"displayText\": \"我想占卜 💼 事業\"\n          },\n          {\n            \"type\": \"postback\",\n            \"label\": \"🌞 今日運勢\",\n            \"data\": \"action=draw&deck=daily\",\n            \"displayText\": \"我想占卜 🌞 今日運勢\"\n          }\n        ]\n      }\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "822257d4-106e-4e61-88b7-90b118b441ef",
+      "name": "回覆抽牌分類選項1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        1648,
+        2464
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.R2_Worker_Url }}getCardId?deck={{$json.deck}}&n=1",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$env.R2_Worker_Token}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1616,
+        2864
+      ],
+      "id": "6778af49-e425-426d-9c19-215e0fbc2725",
+      "name": "根據分類取得隨機的PageId1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e450c3fe-b72a-47cb-a1d9-38d8505e4e56",
+              "name": "deck",
+              "value": "={{ ($json.postbackData || '').split('deck=')[1]?.trim() || '' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1392,
+        2768
+      ],
+      "id": "07d5f4b0-6002-4191-85b0-6224410446b6",
+      "name": "取出deck分類值1"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "get",
+        "pageId": {
+          "__rl": true,
+          "value": "={{ $json.ids[0] }}",
+          "mode": "id"
+        },
+        "simple": false
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        2080,
+        2512
+      ],
+      "id": "5192317c-9546-4e35-8d5c-1763ee8f8fcb",
+      "name": "取得Page資料1",
+      "credentials": {
+        "notionApi": {
+          "id": "U50FbZ8sfcQ0uNaQ",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "87511e98-ed12-4dc3-acc7-9a3263100f15",
+              "name": "id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "1deb8275-5a75-4b0e-b553-d1fab11c00c4",
+              "name": "properties[\"卡牌建議\"]",
+              "value": "={{ $json.properties[\"卡牌建議\"].rich_text[0].text.content }}",
+              "type": "string"
+            },
+            {
+              "id": "1efaeb6a-1021-468f-adbc-bc604954a851",
+              "name": "properties[\"副標題\"]",
+              "value": "={{ $json.properties[\"副標題\"].rich_text[0].text.content }}",
+              "type": "string"
+            },
+            {
+              "id": "777d7f08-0fe4-4399-9333-b21c290666c9",
+              "name": "properties[\"卡牌描述\"]",
+              "value": "={{ $json.properties[\"卡牌描述\"].rich_text[0].text.content }}",
+              "type": "string"
+            },
+            {
+              "id": "d89392c8-6a2a-4c70-9a16-3e71a1ec6e40",
+              "name": "properties[\"名稱\"]",
+              "value": "={{ $json.properties[\"名稱\"].title[0].text.content }}",
+              "type": "string"
+            },
+            {
+              "id": "9ca10109-70d1-4128-9cd5-ef8ce405e6a6",
+              "name": "properties.cdnUrl",
+              "value": "={{ $json.properties.cdnUrl.url }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2304,
+        2416
+      ],
+      "id": "d0ebbff8-bc69-4848-a0a1-0df6b1ec0e38",
+      "name": "整理欄位資料1"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2528,
+        2624
+      ],
+      "id": "1a80602e-6c09-4f14-a73c-111c5d4f3456",
+      "name": "組合1"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "multiplex",
+        "options": {}
+      },
+      "id": "9e0c5512-e90d-4257-a2ae-1b2a2a711f46",
+      "name": "組合資料(前面有Line訊息資料1",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2.1,
+      "position": [
+        1824,
+        2736
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"replyToken\": \"{{ $json.replyToken }}\",\n  \"messages\": [\n    {\n      \"type\": \"flex\",\n      \"altText\": \"塔羅牌抽牌結果\",\n      \"contents\": {\n        \"type\": \"bubble\",\n        \"hero\": {\n          \"type\": \"image\",\n          \"url\": \"{{ $json.properties.cdnUrl }}\",\n          \"size\": \"full\",\n          \"aspectMode\": \"fit\",\n          \"aspectRatio\": \"1:1\"\n        },\n        \"body\": {\n          \"type\": \"box\",\n          \"layout\": \"vertical\",\n          \"spacing\": \"md\",\n          \"contents\": [\n            {\n              \"type\": \"text\",\n              \"text\": \"{{ $json.properties.名稱 }}\",\n              \"weight\": \"bold\",\n              \"size\": \"xl\",\n              \"align\": \"center\"\n            },\n            {\n              \"type\": \"text\",\n              \"text\": \"{{ $json.properties.副標題 }}\",\n              \"size\": \"sm\",\n              \"color\": \"#999999\",\n              \"align\": \"center\"\n            },\n            {\n              \"type\": \"separator\",\n              \"margin\": \"md\"\n            },\n            {\n              \"type\": \"text\",\n              \"text\": \"{{ $json.properties.卡牌描述 }}\",\n              \"wrap\": true,\n              \"margin\": \"md\"\n            },\n            {\n              \"type\": \"text\",\n              \"text\": \"建議：\",\n              \"weight\": \"bold\",\n              \"color\": \"#555555\",\n              \"margin\": \"lg\"\n            },\n            {\n              \"type\": \"text\",\n              \"text\": \"{{ $json.properties.卡牌建議 }}\",\n              \"wrap\": true,\n              \"margin\": \"sm\"\n            }\n          ]\n        },\n        \"footer\": {\n          \"type\": \"box\",\n          \"layout\": \"vertical\",\n          \"contents\": [\n            {\n              \"type\": \"text\",\n              \"text\": \"此為隨機結果 ✦\",\n              \"size\": \"xs\",\n              \"color\": \"#aaaaaa\",\n              \"align\": \"center\"\n            }\n          ]\n        }\n      }\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2816,
+        2624
+      ],
+      "id": "043e4337-89c7-4202-b6e7-cae65964cc42",
+      "name": "轉換成LINE訊息格式1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/reply",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.Line_Access_Token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "e98cc574-ee2e-45e3-85ea-a218bebfe3ce",
+      "name": "回覆LINE1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        3104,
+        2624
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "24542c26-7c8d-44c8-ad13-133ab0a902db",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "success",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2256,
+        720
+      ],
+      "id": "a2cc5fbc-18ff-4494-889f-04140e9b6a37",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"replyToken\": \"{{ $json.replyToken }}\",\n  \"messages\": [\n    {\n      \"type\": \"flex\",\n      \"altText\": \"您今天已經抽過牌囉～\",\n      \"contents\": {\n        \"type\": \"bubble\",\n        \"body\": {\n          \"type\": \"box\",\n          \"layout\": \"vertical\",\n          \"spacing\": \"md\",\n          \"contents\": [\n            {\n              \"type\": \"text\",\n              \"text\": \"🌙 您今天已經抽過牌囉～\",\n              \"weight\": \"bold\",\n              \"size\": \"lg\",\n              \"align\": \"center\"\n            },\n            {\n              \"type\": \"text\",\n              \"text\": \"塔羅每天只會給一次指引 ✦\",\n              \"size\": \"sm\",\n              \"color\": \"#888888\",\n              \"align\": \"center\",\n              \"margin\": \"md\"\n            },\n            {\n              \"type\": \"separator\",\n              \"margin\": \"md\"\n            },\n            {\n              \"type\": \"text\",\n              \"text\": \"明天再來試試吧，祝你今天順心～\",\n              \"wrap\": true,\n              \"align\": \"center\",\n              \"margin\": \"lg\"\n            }\n          ]\n        },\n        \"footer\": {\n          \"type\": \"box\",\n          \"layout\": \"vertical\",\n          \"contents\": [\n            {\n              \"type\": \"text\",\n              \"text\": \"每日限抽一次 ♡\",\n              \"size\": \"xs\",\n              \"color\": \"#aaaaaa\",\n              \"align\": \"center\"\n            }\n          ]\n        }\n      }\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2544,
+        880
+      ],
+      "id": "80311a3c-e5b1-4d7f-9220-6e36db270f4c",
+      "name": "轉換成LINE訊息格式2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/reply",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.Line_Access_Token }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "5c7ae005-08cf-43bc-94e2-f620d6c55796",
+      "name": "回覆LINE2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        2816,
+        992
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1792,
+        720
+      ],
+      "id": "b0e9199d-48d0-462a-97e5-3c93eb1894b9",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json.body ?? $json;\n\n// 保留原本上游的欄位（例如 replyToken、userId、deck 等）\nlet result = {\n  ...$json,  // ← 把原本的 JSON 整個帶過來\n  ok: data.ok ?? false,\n  used: data.used ?? null,\n  deck: data.deck ?? $json.deck ?? null,\n  ids: data.ids ?? [],\n};\n\n// 只判斷是否有抽到牌（ids 是否為空陣列）\nif (Array.isArray(result.ids) && result.ids.length > 0) {\n  result.status = \"success\"; // 抽到牌\n} else {\n  result.status = \"empty\"; // 沒抽到牌（可能今天抽過 or 出錯）\n}\n\nreturn [{ json: result }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        720
+      ],
+      "id": "058e4ab9-4318-4619-8d83-b380c8a34b16",
+      "name": "加入status狀態協助後面節點判斷user是否有抽過"
+    },
+    {
+      "parameters": {
+        "content": "原始 沒有一天一次限制webhook",
+        "height": 80
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        32,
+        2736
+      ],
+      "id": "7b9472c3-a956-4f85-bd7c-eaea1aa0a3d3",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/push",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer ufMXEeRwf97CjCc/IxQYoqi2qZGm6bB++Kwm1N11CPhaReuncmiAaiMR+XfcfDfaLrsqM/L819TMGfr7W99qO4RNggCPFpVmT6n7FE0Y158YQD6wQnFJRJ5iUJE53AkcsPr9+RmDOGngqaXtLHJbJwdB04t89/1O/w1cDnyilFU="
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"to\": \"Uec314d3b7cfd13f832914d68d9a2b3e0\",\n  \"messages\": [\n    {\n      \"type\": \"text\",\n      \"text\": \"Hello, world1\"\n    },\n    {\n      \"type\": \"text\",\n      \"text\": \"Hello, world2\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        432,
+        -176
+      ],
+      "id": "edbcc83f-6793-481b-b14e-5cd55ff60dc2",
+      "name": "push-line-mes-單筆"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.line.me/v2/bot/message/multicast",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer ufMXEeRwf97CjCc/IxQYoqi2qZGm6bB++Kwm1N11CPhaReuncmiAaiMR+XfcfDfaLrsqM/L819TMGfr7W99qO4RNggCPFpVmT6n7FE0Y158YQD6wQnFJRJ5iUJE53AkcsPr9+RmDOGngqaXtLHJbJwdB04t89/1O/w1cDnyilFU="
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"to\": [\n    \"Uec314d3b7cfd13f832914d68d9a2b3e0\",\n    \"U522c5ee37b9285ffe9efcc979a296e44\"\n  ],\n  \"messages\": [\n    { \"type\": \"text\", \"text\": \"這是一條測試push訊息\" },\n    { \"type\": \"text\", \"text\": \"Hello, world2\" }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        432,
+        -352
+      ],
+      "id": "1e2e5aa9-648f-4758-a700-437d38c3be61",
+      "name": "push-line-mes-多筆1"
+    }
+  ],
+  "pinData": {
+    "回覆抽牌分類選項": [
+      {
+        "json": {
+          "sentMessages": [
+            {
+              "id": "587510945614921978",
+              "quoteToken": "Nl4_ONYpmRC8OFSETrVdzVQNqR_37evZUngutVSk1F9B_XcTm7Kum6M3XLMT_wjV2eSTfSSr8teufUBFkAneG4HpDsahyqSPvid5Ejx7y_lsxuvJCbpSxupbBoge70YAV4uWbWzhr7_3_Qg6D65Yow"
+            }
+          ]
+        }
+      }
+    ],
+    "取出deck分類值": [
+      {
+        "json": {
+          "replyToken": "8e772afa168c4420b08ad625833e2eff",
+          "userId": "Uec314d3b7cfd13f832914d68d9a2b3e0",
+          "groupId": null,
+          "roomId": null,
+          "eventType": "postback",
+          "timestamp": 1763015130926,
+          "tsISO": "2025-11-13T06:25:30.926Z",
+          "postbackData": "action=draw&deck=love",
+          "params": null,
+          "deck": "love"
+        }
+      }
+    ],
+    "根據分類取得隨機的PageId": [
+      {
+        "json": {
+          "ok": true,
+          "used": false,
+          "date": "20251113",
+          "message": "today_marked_and_cards_ready",
+          "deck": "love",
+          "ids": [
+            "286a318b5ce680028a65fc1829201e1e"
+          ],
+          "totalInDeck": 30,
+          "updatedAt": "2025-11-09T05:00:19.894Z",
+          "error": null
+        }
+      }
+    ],
+    "Merge": [
+      {
+        "json": {
+          "replyToken": "8e772afa168c4420b08ad625833e2eff",
+          "userId": "Uec314d3b7cfd13f832914d68d9a2b3e0",
+          "groupId": null,
+          "roomId": null,
+          "eventType": "postback",
+          "timestamp": 1763015130926,
+          "tsISO": "2025-11-13T06:25:30.926Z",
+          "postbackData": "action=draw&deck=love",
+          "params": null,
+          "deck": "love",
+          "ok": true,
+          "used": false,
+          "date": "20251113",
+          "message": "today_marked_and_cards_ready",
+          "ids": [
+            "286a318b5ce680028a65fc1829201e1e"
+          ],
+          "totalInDeck": 30,
+          "updatedAt": "2025-11-09T05:00:19.894Z",
+          "error": null
+        }
+      }
+    ],
+    "加入status狀態協助後面節點判斷user是否有抽過": [
+      {
+        "json": {
+          "replyToken": "8e772afa168c4420b08ad625833e2eff",
+          "userId": "Uec314d3b7cfd13f832914d68d9a2b3e0",
+          "groupId": null,
+          "roomId": null,
+          "eventType": "postback",
+          "timestamp": 1763015130926,
+          "tsISO": "2025-11-13T06:25:30.926Z",
+          "postbackData": "action=draw&deck=love",
+          "params": null,
+          "deck": "love",
+          "ok": true,
+          "used": false,
+          "date": "20251113",
+          "message": "today_marked_and_cards_ready",
+          "ids": [
+            "286a318b5ce680028a65fc1829201e1e"
+          ],
+          "totalInDeck": 30,
+          "updatedAt": "2025-11-09T05:00:19.894Z",
+          "error": null,
+          "status": "success"
+        }
+      }
+    ],
+    "組合資料(前面有Line訊息資料": [
+      {
+        "json": {
+          "replyToken": "8e772afa168c4420b08ad625833e2eff",
+          "userId": "Uec314d3b7cfd13f832914d68d9a2b3e0",
+          "groupId": null,
+          "roomId": null,
+          "eventType": "postback",
+          "timestamp": 1763015130926,
+          "tsISO": "2025-11-13T06:25:30.926Z",
+          "postbackData": "action=draw&deck=love",
+          "params": null,
+          "deck": "love",
+          "ok": true,
+          "used": false,
+          "date": "20251113",
+          "message": "today_marked_and_cards_ready",
+          "ids": [
+            "286a318b5ce680028a65fc1829201e1e"
+          ],
+          "totalInDeck": 30,
+          "updatedAt": "2025-11-09T05:00:19.894Z",
+          "error": null,
+          "status": "success"
+        }
+      }
+    ],
+    "取得Page資料": [
+      {
+        "json": {
+          "object": "page",
+          "id": "286a318b-5ce6-8002-8a65-fc1829201e1e",
+          "created_time": "2025-10-08T13:41:00.000Z",
+          "last_edited_time": "2025-10-27T03:20:00.000Z",
+          "created_by": {
+            "object": "user",
+            "id": "285d872b-594c-8145-b0bb-0002ca08bcb5"
+          },
+          "last_edited_by": {
+            "object": "user",
+            "id": "3358725e-0634-451c-a8b8-7eccdae2184a"
+          },
+          "cover": null,
+          "icon": null,
+          "parent": {
+            "type": "database_id",
+            "database_id": "286a318b-5ce6-8067-bd29-c258ae0cdffe"
+          },
+          "archived": false,
+          "in_trash": false,
+          "is_locked": false,
+          "properties": {
+            "建立時間": {
+              "id": "%3Cxfd",
+              "type": "created_time",
+              "created_time": "2025-10-08T13:41:00.000Z"
+            },
+            "卡牌建議": {
+              "id": "CNxY",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "這張牌鼓勵你重新審視自己的付出，是出於真心，還是害怕孤單。當你願意放開那份執著，新的能量才有機會進來。宇宙在提醒你：有時該救的不是關係，而是自己。",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "這張牌鼓勵你重新審視自己的付出，是出於真心，還是害怕孤單。當你願意放開那份執著，新的能量才有機會進來。宇宙在提醒你：有時該救的不是關係，而是自己。",
+                  "href": null
+                }
+              ]
+            },
+            "圖片": {
+              "id": "MWT%5B",
+              "type": "files",
+              "files": [
+                {
+                  "name": "12倒吊人.jpg",
+                  "type": "file",
+                  "file": {
+                    "url": "https://prod-files-secure.s3.us-west-2.amazonaws.com/652a318b-5ce6-81ff-b51e-0003e778ad00/12016544-d9ac-42a8-ba2b-42baba8a41da/12%E5%80%92%E5%90%8A%E4%BA%BA.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIAZI2LB466TK4CGAZ7%2F20251113%2Fus-west-2%2Fs3%2Faws4_request&X-Amz-Date=20251113T062533Z&X-Amz-Expires=3600&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEH0aCXVzLXdlc3QtMiJHMEUCIAJiXe2o8MDThGxbYekmacgIylyuZ%2Bdaf4wnOp9VJhtJAiEA5IfCXJFN5UHcDLwGAYeCavohB%2ByVmUdtvlMX2Wmi3goq%2FwMIRhAAGgw2Mzc0MjMxODM4MDUiDCF2djiqDcUXnxxyrSrcAx0huj0jIc9RCXHr16qBXWuL%2BiU9aeUmUJ5jwORUHVRwFG0P32Xebby1MAbd6DT6J3D%2BvmQR%2BVt3P4dIUTPSdX%2FzbU3iz2%2BL3ORNQ850SVbHidlVIhWCX3ciLe6dpnxzo8m53os4KG8dXf879a11M9PZGaJ%2FzwsGBH7a4ch%2FY4cAn6ig3gbBj0svzhVk%2BK5Da1ZOWftcJy6P9UEXeXV64NKVtJxtDip0UwyQwyJHaNmjYiq42DYzc7%2FgKF4bmdwWMrfKLgdPsIs2PaFHiV6VV3herExbVSVLN03tXBa2tLEYy%2FEggbbfqAg8zuUcDCP0CwMIdWMFH60RNFVwGOT7VhEhD121PwrB0iZZ%2FTbTVnYN1enl8LowXF059YAcUzlw9sdcgm75haw%2FLERokqV3snKgmE%2BK8C9Y0%2FsxQFdwR%2FjBMt3P4qkbjT9iwINNxHxT%2FmsH6FrPiq92%2FMdC%2F7%2Fg6EPeOaHsCZgP7bQo94Ys2y3FWt11j8UNQHt9%2BUZNtj5jnbLJc5Hw22r8Nx77RvL7eCozQPLuX2sq90QZFC%2F3mq5yeVffn1AxUWoOzcNe3QJTz%2Fyk%2BI1myIKXucumLpSFEbnzx9vsCpMkalVzXbfu%2FPsnfuEdIOmImCf0OhtcMO3N1cgGOqUBfzJwGasm91Lovsam8mudsrteyPHjUJFDnrzIspcSdiRs0aRXNwi9SriXU%2Fq2AxPrLRG2x6i5z0wBLz6JF1ROpNe%2FJn0%2BGCRvKls7HztETgG11dJ9qcrM3%2Bko2XcwKUO%2BcdlztpWo3qJyn1GldId3%2Fv%2FVYtYA38s5EtJ3LDmo5%2FeQpf0xBmdDyKMo5PpOZZMgFJiJgUhT40dP9SdIIAQXWugmuXGZ&X-Amz-Signature=31ac7e15e96a09a6ef5fba98f8229e0939d64c2a121c4c62085c087c2c31bfb2&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject",
+                    "expiry_time": "2025-11-13T07:25:33.207Z"
+                  }
+                }
+              ]
+            },
+            "分類": {
+              "id": "Ra%5EO",
+              "type": "select",
+              "select": {
+                "id": "e4ac4606-a6dd-4522-9a26-b0837833af63",
+                "name": "感情",
+                "color": "pink"
+              }
+            },
+            "狀態": {
+              "id": "%5DLmi",
+              "type": "select",
+              "select": {
+                "id": "Fns{",
+                "name": "使用中",
+                "color": "red"
+              }
+            },
+            "按鈕文字": {
+              "id": "f~a%3B",
+              "type": "select",
+              "select": {
+                "id": "Mdra",
+                "name": "預測",
+                "color": "green"
+              }
+            },
+            "cdnUrl": {
+              "id": "mR~%7C",
+              "type": "url",
+              "url": "https://pub-0e42f333964b43dab597e87823be9c54.r2.dev/divination/倒吊人_逆位_2025-10-27_11-19-56_fttp.jpg"
+            },
+            "卡牌描述": {
+              "id": "m%7DKS",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "這張牌象徵停滯與抗拒改變。它提醒你，愛有時會陷入「我不甘心、但又放不下」的矛盾。或許你正卡在一段沒有進展的關係裡，等待對方改變，卻忽略了自己早已疲憊。吊人逆位在說，當你一直停在原地，愛也無法流動。",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "這張牌象徵停滯與抗拒改變。它提醒你，愛有時會陷入「我不甘心、但又放不下」的矛盾。或許你正卡在一段沒有進展的關係裡，等待對方改變，卻忽略了自己早已疲憊。吊人逆位在說，當你一直停在原地，愛也無法流動。",
+                  "href": null
+                }
+              ]
+            },
+            "副標題": {
+              "id": "pQ~D",
+              "type": "rich_text",
+              "rich_text": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "The Hanged Man (R)",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "The Hanged Man (R)",
+                  "href": null
+                }
+              ]
+            },
+            "名稱": {
+              "id": "title",
+              "type": "title",
+              "title": [
+                {
+                  "type": "text",
+                  "text": {
+                    "content": "倒吊人 逆位",
+                    "link": null
+                  },
+                  "annotations": {
+                    "bold": false,
+                    "italic": false,
+                    "strikethrough": false,
+                    "underline": false,
+                    "code": false,
+                    "color": "default"
+                  },
+                  "plain_text": "倒吊人 逆位",
+                  "href": null
+                }
+              ]
+            }
+          },
+          "url": "https://www.notion.so/286a318b5ce680028a65fc1829201e1e",
+          "public_url": null,
+          "request_id": "584c1bdb-cb9b-4197-983b-9777e99124ca"
+        }
+      }
+    ],
+    "整理欄位資料": [
+      {
+        "json": {
+          "id": "286a318b-5ce6-8002-8a65-fc1829201e1e",
+          "properties": {
+            "卡牌建議": "這張牌鼓勵你重新審視自己的付出，是出於真心，還是害怕孤單。當你願意放開那份執著，新的能量才有機會進來。宇宙在提醒你：有時該救的不是關係，而是自己。",
+            "副標題": "The Hanged Man (R)",
+            "卡牌描述": "這張牌象徵停滯與抗拒改變。它提醒你，愛有時會陷入「我不甘心、但又放不下」的矛盾。或許你正卡在一段沒有進展的關係裡，等待對方改變，卻忽略了自己早已疲憊。吊人逆位在說，當你一直停在原地，愛也無法流動。",
+            "名稱": "倒吊人 逆位",
+            "cdnUrl": "https://pub-0e42f333964b43dab597e87823be9c54.r2.dev/divination/倒吊人_逆位_2025-10-27_11-19-56_fttp.jpg"
+          }
+        }
+      }
+    ],
+    "組合": [
+      {
+        "json": {
+          "id": "286a318b-5ce6-8002-8a65-fc1829201e1e",
+          "properties": {
+            "卡牌建議": "這張牌鼓勵你重新審視自己的付出，是出於真心，還是害怕孤單。當你願意放開那份執著，新的能量才有機會進來。宇宙在提醒你：有時該救的不是關係，而是自己。",
+            "副標題": "The Hanged Man (R)",
+            "卡牌描述": "這張牌象徵停滯與抗拒改變。它提醒你，愛有時會陷入「我不甘心、但又放不下」的矛盾。或許你正卡在一段沒有進展的關係裡，等待對方改變，卻忽略了自己早已疲憊。吊人逆位在說，當你一直停在原地，愛也無法流動。",
+            "名稱": "倒吊人 逆位",
+            "cdnUrl": "https://pub-0e42f333964b43dab597e87823be9c54.r2.dev/divination/倒吊人_逆位_2025-10-27_11-19-56_fttp.jpg"
+          },
+          "replyToken": "8e772afa168c4420b08ad625833e2eff",
+          "userId": "Uec314d3b7cfd13f832914d68d9a2b3e0",
+          "groupId": null,
+          "roomId": null,
+          "eventType": "postback",
+          "timestamp": 1763015130926,
+          "tsISO": "2025-11-13T06:25:30.926Z",
+          "postbackData": "action=draw&deck=love",
+          "params": null,
+          "deck": "love",
+          "ok": true,
+          "used": false,
+          "date": "20251113",
+          "message": "today_marked_and_cards_ready",
+          "ids": [
+            "286a318b5ce680028a65fc1829201e1e"
+          ],
+          "totalInDeck": 30,
+          "updatedAt": "2025-11-09T05:00:19.894Z",
+          "error": null,
+          "status": "success"
+        }
+      }
+    ],
+    "轉換成LINE訊息格式": [
+      {
+        "json": {
+          "replyToken": "8e772afa168c4420b08ad625833e2eff",
+          "messages": [
+            {
+              "type": "flex",
+              "altText": "塔羅牌抽牌結果",
+              "contents": {
+                "type": "bubble",
+                "hero": {
+                  "type": "image",
+                  "url": "https://pub-0e42f333964b43dab597e87823be9c54.r2.dev/divination/倒吊人_逆位_2025-10-27_11-19-56_fttp.jpg",
+                  "size": "full",
+                  "aspectMode": "fit",
+                  "aspectRatio": "1:1"
+                },
+                "body": {
+                  "type": "box",
+                  "layout": "vertical",
+                  "spacing": "md",
+                  "contents": [
+                    {
+                      "type": "text",
+                      "text": "倒吊人 逆位",
+                      "weight": "bold",
+                      "size": "xl",
+                      "align": "center"
+                    },
+                    {
+                      "type": "text",
+                      "text": "The Hanged Man (R)",
+                      "size": "sm",
+                      "color": "#999999",
+                      "align": "center"
+                    },
+                    {
+                      "type": "separator",
+                      "margin": "md"
+                    },
+                    {
+                      "type": "text",
+                      "text": "這張牌象徵停滯與抗拒改變。它提醒你，愛有時會陷入「我不甘心、但又放不下」的矛盾。或許你正卡在一段沒有進展的關係裡，等待對方改變，卻忽略了自己早已疲憊。吊人逆位在說，當你一直停在原地，愛也無法流動。",
+                      "wrap": true,
+                      "margin": "md"
+                    },
+                    {
+                      "type": "text",
+                      "text": "建議：",
+                      "weight": "bold",
+                      "color": "#555555",
+                      "margin": "lg"
+                    },
+                    {
+                      "type": "text",
+                      "text": "這張牌鼓勵你重新審視自己的付出，是出於真心，還是害怕孤單。當你願意放開那份執著，新的能量才有機會進來。宇宙在提醒你：有時該救的不是關係，而是自己。",
+                      "wrap": true,
+                      "margin": "sm"
+                    }
+                  ]
+                },
+                "footer": {
+                  "type": "box",
+                  "layout": "vertical",
+                  "contents": [
+                    {
+                      "type": "text",
+                      "text": "此為隨機結果 ✦",
+                      "size": "xs",
+                      "color": "#aaaaaa",
+                      "align": "center"
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "回覆LINE": [
+      {
+        "json": {
+          "sentMessages": [
+            {
+              "id": "587510974454432053",
+              "quoteToken": "ZhNONHxWVphH_UpBzS2DlzJ3IkP1JdOZbDwgGrLjJm35K0NrBzu0F_luzLyOIPoJq94TBbGefldHw5vnECrOuteC1bGtDDeSq0rk6wvbk1N17D77KaWwl1MA0g2D59hI3eK7JvV6VI2b_Qe8Z1tgHQ"
+            }
+          ]
+        }
+      }
+    ],
+    "接收LINE訊息": [
+      {
+        "json": {
+          "headers": {
+            "host": "divination.zeabur.app",
+            "user-agent": "LineBotWebhook/2.0",
+            "content-length": "373",
+            "content-type": "application/json; charset=utf-8",
+            "x-forwarded-for": "147.92.150.197, 147.92.150.197",
+            "x-forwarded-host": "divination.zeabur.app",
+            "x-forwarded-port": "443",
+            "x-forwarded-proto": "https",
+            "x-line-signature": "lC23z/m9tAChBuBoep5DWE07kSAEAPp+9XOofw6s9Ls=",
+            "x-real-ip": "147.92.150.197",
+            "x-zeabur-container-port": "5678",
+            "x-zeabur-ip-country": "JP",
+            "x-zeabur-request-id": "cgk1::1a88d939-ecc9-4d89-80fd-990c8049f85e",
+            "accept-encoding": "gzip"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "destination": "Ub1880f28a961ab2814d901636bfe4425",
+            "events": [
+              {
+                "type": "postback",
+                "postback": {
+                  "data": "action=draw&deck=love"
+                },
+                "webhookEventId": "01KA3TKEZGC0NQ6EG855QJARK9",
+                "deliveryContext": {
+                  "isRedelivery": false
+                },
+                "timestamp": 1763212639110,
+                "source": {
+                  "type": "user",
+                  "userId": "Uec314d3b7cfd13f832914d68d9a2b3e0"
+                },
+                "replyToken": "966998e38f254345a9ec400adef65652",
+                "mode": "active"
+              }
+            ]
+          },
+          "webhookUrl": "http://localhost:5678/webhook/line-webhook",
+          "executionMode": "production"
+        }
+      }
+    ],
+    "將回傳資料整理": [
+      {
+        "json": {
+          "replyToken": "966998e38f254345a9ec400adef65652",
+          "userId": "Uec314d3b7cfd13f832914d68d9a2b3e0",
+          "groupId": null,
+          "roomId": null,
+          "eventType": "postback",
+          "timestamp": 1763212639110,
+          "tsISO": "2025-11-15T13:17:19.110Z",
+          "postbackData": "action=draw&deck=love",
+          "params": null
+        }
+      }
+    ],
+    "push-line-mes-單筆": [
+      {
+        "json": {
+          "sentMessages": [
+            {
+              "id": "588238258228429231",
+              "quoteToken": "pTW5vz1K4w0y3yQ5-Q8_Hm6RU9R3gjv5R8bm7spb95b_Ng7htHqVOczZyD125to1OyEQjlAysEc6cTMa1Nux8zlEYmONCN96_wPLOuFejKFO9UgUG88CiHo-495SA9Iv2DlwBnvinfbeeU9Af_mK0A"
+            },
+            {
+              "id": "588238258430280057",
+              "quoteToken": "R8ZVWVXbdt_JUNaEjEk79wEV_9lQ7NLUPY1Y7K0VXUf4S_YPgitiB1oF_r_Oe34Wb1zPgOdL3rYJasmtqYqBtnsiLfYGPO3YH9fBVNblquzFRzBEXURzzLIEUssKZG9td7pzTjMDd_tzJFDx5NOX9Q"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "回傳沒有cdnUrl的page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger1": {
+      "main": [
+        [
+          {
+            "node": "取得所有卡片的資料",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "Quick-reply2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "接收LINE訊息": {
+      "main": [
+        [
+          {
+            "node": "將回傳資料整理",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "將回傳資料整理": {
+      "main": [
+        [
+          {
+            "node": "偵測是抽牌選項or給牌",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "偵測是抽牌選項or給牌": {
+      "main": [
+        [
+          {
+            "node": "是否包含關鍵字 抽牌",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "取出deck分類值",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "組合資料(前面有Line訊息資料",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "回傳沒有cdnUrl的page": {
+      "main": [
+        [
+          {
+            "node": "將資料整理",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "是否包含關鍵字 抽牌": {
+      "main": [
+        [
+          {
+            "node": "回覆抽牌分類選項",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "將資料整理": {
+      "main": [
+        [
+          {
+            "node": "BinaryChangeToJson",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BinaryChangeToJson": {
+      "main": [
+        [
+          {
+            "node": "將圖片上傳到R2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "取出pageId和Key",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "取出pageId和Key": {
+      "main": [
+        [
+          {
+            "node": "組合資料",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "將圖片上傳到R2": {
+      "main": [
+        [
+          {
+            "node": "如果上傳成功",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "如果上傳成功": {
+      "main": [
+        [
+          {
+            "node": "組合資料",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "組合資料": {
+      "main": [
+        [
+          {
+            "node": "Key加入Cloudflare公開網址",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Key加入Cloudflare公開網址": {
+      "main": [
+        [
+          {
+            "node": "更新資料庫cdnUrl欄位",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "取得所有卡片的資料": {
+      "main": [
+        [
+          {
+            "node": "整理所有卡片id和分類",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "整理所有卡片id和分類": {
+      "main": [
+        [
+          {
+            "node": "更新最新CacheCard資料(隨機抽牌會從這邊拿pageId)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "根據分類取得隨機的PageId": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "取出deck分類值": {
+      "main": [
+        [
+          {
+            "node": "根據分類取得隨機的PageId",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "取得Page資料": {
+      "main": [
+        [
+          {
+            "node": "整理欄位資料",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "整理欄位資料": {
+      "main": [
+        [
+          {
+            "node": "組合",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "組合": {
+      "main": [
+        [
+          {
+            "node": "轉換成LINE訊息格式",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "組合資料(前面有Line訊息資料": {
+      "main": [
+        [
+          {
+            "node": "取得Page資料",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "組合",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "轉換成LINE訊息格式": {
+      "main": [
+        [
+          {
+            "node": "回覆LINE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Quick-reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "接收LINE訊息1": {
+      "main": [
+        [
+          {
+            "node": "將回傳資料整理1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "將回傳資料整理1": {
+      "main": [
+        [
+          {
+            "node": "偵測是抽牌選項or給牌1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "偵測是抽牌選項or給牌1": {
+      "main": [
+        [
+          {
+            "node": "是否包含關鍵字 抽牌1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "取出deck分類值1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "組合資料(前面有Line訊息資料1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "是否包含關鍵字 抽牌1": {
+      "main": [
+        [
+          {
+            "node": "回覆抽牌分類選項1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "根據分類取得隨機的PageId1": {
+      "main": [
+        [
+          {
+            "node": "組合資料(前面有Line訊息資料1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "取出deck分類值1": {
+      "main": [
+        [
+          {
+            "node": "根據分類取得隨機的PageId1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "取得Page資料1": {
+      "main": [
+        [
+          {
+            "node": "整理欄位資料1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "整理欄位資料1": {
+      "main": [
+        [
+          {
+            "node": "組合1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "組合1": {
+      "main": [
+        [
+          {
+            "node": "轉換成LINE訊息格式1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "組合資料(前面有Line訊息資料1": {
+      "main": [
+        [
+          {
+            "node": "取得Page資料1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "組合1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "轉換成LINE訊息格式1": {
+      "main": [
+        [
+          {
+            "node": "回覆LINE1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "組合資料(前面有Line訊息資料",
+            "type": "main",
+            "index": 1
+          }
+        ],
+        [
+          {
+            "node": "轉換成LINE訊息格式2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "轉換成LINE訊息格式2": {
+      "main": [
+        [
+          {
+            "node": "回覆LINE2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "加入status狀態協助後面節點判斷user是否有抽過",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "加入status狀態協助後面節點判斷user是否有抽過": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "回覆抽牌分類選項": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "f66a3589-eeaf-4ed0-bcce-eb7303e22abd",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ad9dc8558804378c2c138bc230d864996ce47cb2518ba4207f956c784194af97"
+  },
+  "id": "1tEEwkgwYup5JM1w",
+  "tags": []
+}

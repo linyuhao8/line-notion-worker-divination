@@ -1,0 +1,39 @@
+services:
+  n8n:
+    # 使用官方 n8n 映像版本（v1.114.3）
+    image: n8nio/n8n:latest
+
+    # 對外開放 port 5678 → 可從瀏覽器進入 http://localhost:5678
+    ports:
+      - "5678:5678"
+
+    environment:
+    
+      # n8n 內部加密 key，用於加密憑證等敏感資訊（務必換成長且隨機字串）
+      - N8N_ENCRYPTION_KEY=your-long-random-key
+
+      # R2 公開圖檔的 CDN 基底網址，用於組合完整 cdnUrl（結尾保留 /）
+      - PUBLIC_BASE_URL=https://pub-e3d9bac061fa4ec797d7dbeb52dd445d.r2.dev/
+
+      # 上傳圖片的資料夾路徑前綴（會組成 divination/xxx.jpg）
+      - Img_R2_Path=divination
+
+      # Cloudflare Worker 驗證自訂 token（n8n 呼叫 /upload /getCardId 等用）
+      - R2_Worker_Token=Hello
+
+      # Cloudflare Worker 的基底 URL（需以 http 或 https 開頭）
+      - R2_Worker_Url=https://divination.cooldas6688.workers.dev/
+
+      # LINE Bot 的 Channel Access Token（用於 reply/push 訊息）去開發者後台拿
+      - Line_Access_Token=yourToken
+
+    volumes:
+      # 將容器內的 n8n 資料目錄掛載到本機
+      # 保留 workflow、credentials、設定檔（容器重啟後不會遺失）
+      - ~/.n8n:/home/node/.n8n
+
+# n8n 如果重置 沒有用 沒有叫你重新創建 輕記得刪除
+# 1. docker compose down
+# 2. rm -rf ~/.n8n
+# 3. docker compose up -d
+# 4. 無痕模式開啟 http://localhost:5678
