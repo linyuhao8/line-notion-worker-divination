@@ -128,3 +128,82 @@ Worker 提供 4 大端點：
 - 可動態生成卡牌內容（含圖片、描述、建議等）
 
 ---
+
+## **本地啟動 n8n**
+
+這個專案提供一份可直接啟動的 Docker Compose：
+
+- [n8n-docker-compose/docker-compose.yml](/Users/hank/Documents/Projects/cooldas-client/line-notion-worker-divination/n8n-docker-compose/docker-compose.yml)
+
+### **1. 前置需求**
+
+- 已安裝 Docker Desktop
+- 本機可執行 `docker compose`
+
+可先用下面指令確認：
+
+```bash
+docker --version
+docker compose version
+```
+
+### **2. 修改 compose 內必要設定**
+
+打開 [n8n-docker-compose/docker-compose.yml](/n8n-docker-compose/docker-compose.yml)，至少先把這兩個值換掉：
+
+```yaml
+N8N_ENCRYPTION_KEY: your-long-random-key
+Line_Access_Token: your-line-channel-access-token
+```
+
+其他變數用途如下：
+
+- `PUBLIC_BASE_URL`：R2 公開 CDN 網址，組合 Notion 的 `cdnUrl` 用
+- `Img_R2_Path`：圖片上傳到 R2 的資料夾前綴
+- `R2_Worker_Token`：n8n 呼叫 Worker API 時帶的 Bearer token
+- `R2_Worker_Url`：你的 Cloudflare Worker 網址，結尾要保留 `/`
+
+### **3. 啟動 n8n**
+
+在專案根目錄執行：
+
+```bash
+docker compose -f n8n-docker-compose/docker-compose.yml up -d
+```
+
+啟動後開啟：
+
+```text
+http://localhost:5678
+```
+
+第一次進入 n8n 時：
+
+- 建立 owner 帳號
+- 匯入 [divination-line-flow.json](/Users/hank/Documents/Projects/cooldas-client/line-notion-worker-divination/divination-line-flow.json)
+- 到 workflow 內補上 Notion credential 等節點設定
+
+### **4. 查看狀態與日誌**
+
+```bash
+docker compose -f n8n-docker-compose/docker-compose.yml ps
+docker compose -f n8n-docker-compose/docker-compose.yml logs -f
+```
+
+### **5. 停止服務**
+
+```bash
+docker compose -f n8n-docker-compose/docker-compose.yml down
+```
+
+### **6. 重置 n8n 資料**
+
+如果你要把 n8n 的本地資料整個重建：
+
+```bash
+docker compose -f n8n-docker-compose/docker-compose.yml down
+rm -rf n8n-docker-compose/data/n8n
+docker compose -f n8n-docker-compose/docker-compose.yml up -d
+```
+
+重置後建議用無痕模式重新開啟 `http://localhost:5678`，避免瀏覽器殘留舊 session。
